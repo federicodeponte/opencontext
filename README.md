@@ -1,191 +1,193 @@
-# 🌐 OpenContext
+# OpenContext
 
-> Open-source AI-powered company context analysis
+**Simple API for AI-powered company context analysis using Google Gemini**
 
-Extract structured business information from any website using Google Gemini 3.0 Pro with web search and URL context integration. Built with Next.js, TypeScript, and Tailwind CSS.
-
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
-[![Gemini API](https://img.shields.io/badge/Gemini-3.0%20Pro-orange)](https://ai.google.dev/gemini-api)
+OpenContext is a lightweight Next.js API that extracts comprehensive company information from any website URL using Google's Gemini AI. Perfect for lead research, competitive analysis, and business intelligence.
 
 ## ✨ Features
 
-- 🤖 **AI-Powered Analysis** - Powered by Google Gemini 3.0 Pro Preview
-- 🌐 **Web Search Integration** - Combines URL content with Google search results
-- 📊 **Structured Data Extraction** - Returns clean, structured business information
-- 🏢 **Multi-Company Profiles** - Save and switch between multiple company contexts
-- ⚡ **Real-Time Progress** - Live progress tracking with time estimation
-- 💾 **Local Storage** - Automatic persistence with localStorage
-- 🎨 **Beautiful UI** - Clean, responsive design with dark mode
-- 🔧 **Type-Safe** - Full TypeScript support throughout
+- **🤖 AI-Powered Analysis** - Uses Google Gemini 1.5 Pro to extract comprehensive company context
+- **⚡ Simple API** - Single endpoint: URL input → structured JSON output
+- **🔒 Secure** - Server-side API key configuration
+- **📊 Structured Output** - Consistent JSON schema for easy integration
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### Prerequisites
 
-```bash
-git clone https://github.com/federicodeponte/opencontext.git
-cd opencontext
-npm install
-```
+- Node.js 18+ and npm
+- Google Gemini API key ([Get one here](https://aistudio.google.com/app/apikey))
 
-### 2. Environment Setup
+### Installation
 
-Create a `.env.local` file:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/federicodeponte/opencontext.git
+   cd opencontext
+   ```
 
-```bash
-# Required: Get your API key from https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
-```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-### 3. Start Development
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env.local
+   ```
+   
+   Add your Gemini API key to `.env.local`:
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
 
-```bash
-npm run dev
-```
+4. **Start the API server**
+   ```bash
+   npm run dev
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) and start analyzing websites!
+   The API will be available at [http://localhost:3000](http://localhost:3000)
 
-## 📖 Usage
+## 📖 API Usage
 
-### Basic Component Usage
-
-```tsx
-import { ContextForm, useContextStorage } from '@/components'
-
-export function MyApp() {
-  const { businessContext, analyzeWebsite } = useContextStorage()
-  
-  return (
-    <div>
-      <ContextForm onAnalysisComplete={(context) => {
-        console.log('Analysis complete:', context)
-      }} />
-    </div>
-  )
-}
-```
-
-### API Usage
-
-```tsx
-const response = await fetch('/api/analyze', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ url: 'https://example.com' })
-})
-
-const companyData = await response.json()
-```
-
-## 🔧 API Reference
-
-### Analyze Endpoint
+### Endpoint
 
 **POST** `/api/analyze`
 
-#### Request Body
+### Request
 
-```typescript
+```json
 {
-  url: string        // Website URL to analyze
-  apiKey?: string    // Optional: Gemini API key (uses env var if not provided)
+  "url": "https://example.com",
+  "apiKey": "your-gemini-api-key"  // Optional if GEMINI_API_KEY env var is set
 }
 ```
 
-#### Response
+### Response
 
-```typescript
+```json
 {
-  company_name: string
-  company_url: string
-  industry: string
-  description: string
-  products: string[]
-  target_audience: string
-  competitors: string[]
-  tone: string
-  pain_points: string[]
-  value_propositions: string[]
-  use_cases: string[]
-  content_themes: string[]
+  "company_name": "Example Company",
+  "company_url": "https://example.com",
+  "industry": "Technology",
+  "description": "A comprehensive description of the company...",
+  "products": ["Product 1", "Product 2"],
+  "target_audience": "Tech startups and enterprises",
+  "competitors": ["Competitor A", "Competitor B"],
+  "tone": "Professional and technical",
+  "pain_points": ["Problem 1", "Problem 2"],
+  "value_propositions": ["Value 1", "Value 2"],
+  "use_cases": ["Use case 1", "Use case 2"],
+  "content_themes": ["Theme 1", "Theme 2"]
 }
 ```
 
-## 📁 Project Structure
-
-```
-src/
-├── components/
-│   ├── ContextForm.tsx      # Main analysis form
-│   ├── CompanySelector.tsx  # Multi-company selector  
-│   └── ui/                  # Reusable UI components
-├── hooks/
-│   └── useContextStorage.ts # Context management hook
-├── lib/
-│   ├── types.ts            # TypeScript interfaces
-│   ├── utils.ts            # Utility functions
-│   └── constants.ts        # App constants
-└── app/
-    ├── api/analyze/        # Analysis API endpoint
-    └── page.tsx           # Demo page
-```
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Node.js 18+
-- npm/yarn/pnpm
-- Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-
-### Available Scripts
+### cURL Example
 
 ```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-npm run type-check   # TypeScript checks
+curl -X POST http://localhost:3000/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://anthropic.com"
+  }'
 ```
 
-### Key Dependencies
+### JavaScript Example
 
-- **@google/generative-ai** - Gemini API integration
-- **lucide-react** - Beautiful icons
-- **sonner** - Toast notifications
-- **@radix-ui/** - Accessible UI primitives
-- **tailwind-merge** - Utility merging
+```javascript
+const response = await fetch('/api/analyze', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    url: 'https://example.com'
+  }),
+});
+
+const analysis = await response.json();
+console.log(analysis);
+```
+
+## 🛠️ Technical Details
+
+### What Gets Extracted
+
+The AI analyzes the website and extracts:
+- Company name and website
+- Industry and description  
+- Products/services offered
+- Target audience
+- Main competitors
+- Brand tone and voice
+- Customer pain points
+- Value propositions
+- Use cases and applications
+- Content themes and topics
+
+### Project Structure
+
+```
+opencontext/
+├── src/
+│   ├── app/
+│   │   ├── api/analyze/route.ts    # Main analysis API
+│   │   ├── layout.tsx              # Minimal layout
+│   │   └── page.tsx                # API documentation page
+│   └── lib/
+│       └── types.ts                # TypeScript definitions
+├── .env.example                    # Environment template
+└── README.md
+```
 
 ## 🚀 Deployment
 
 ### Vercel (Recommended)
 
-1. Push your code to GitHub
-2. Connect to Vercel
-3. Set `GEMINI_API_KEY` environment variable
-4. Deploy!
+1. **Push to GitHub**
+   ```bash
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
+   ```
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/federicodeponte/opencontext)
+2. **Deploy to Vercel**
+   - Go to [vercel.com](https://vercel.com)
+   - Import your GitHub repository
+   - Add `GEMINI_API_KEY` environment variable
+   - Deploy
 
-## 🤝 Contributing
+### Environment Variables
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GEMINI_API_KEY` | Google Gemini API key | Yes |
 
-## 📄 License
+## 🔧 Error Handling
 
-This project is licensed under the MIT License.
+The API returns appropriate HTTP status codes:
 
-## 🙏 Acknowledgments
+- `200` - Success
+- `400` - Invalid request (missing URL)
+- `401` - Invalid API key
+- `503` - Service unavailable (missing API key configuration)
+- `500` - Internal server error
 
-- **Google Gemini** - For providing powerful AI capabilities
-- **Next.js Team** - For the amazing React framework
-- **Tailwind CSS** - For the utility-first CSS framework
-- **Radix UI** - For accessible component primitives
+Example error response:
+```json
+{
+  "error": "Website analysis is temporarily unavailable. Please configure your Gemini API key."
+}
+```
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📧 Support
+
+- **Issues:** [GitHub Issues](https://github.com/federicodeponte/opencontext/issues)
 
 ---
 
-**Built with ❤️ for the open-source community**
-
-[⭐ Star us on GitHub](https://github.com/federicodeponte/opencontext) if you find this useful!
+**Made with ❤️ by [Federico de Ponte](https://github.com/federicodeponte)**
