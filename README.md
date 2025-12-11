@@ -6,7 +6,7 @@ OpenContext is a lightweight Next.js API that extracts comprehensive company inf
 
 ## ✨ Features
 
-- **🤖 AI-Powered Analysis** - Uses Google Gemini 1.5 Pro to extract comprehensive company context
+- **🤖 AI-Powered Analysis** - Uses Google Gemini 3 Pro Preview to extract comprehensive company context
 - **⚡ Simple API** - Single endpoint: URL input → structured JSON output
 - **🔒 Secure** - Server-side API key configuration
 - **📊 Structured Output** - Consistent JSON schema for easy integration

@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 /**
  * POST /api/analyze
- * Analyzes a website URL and extracts company context using Gemini
+ * Analyzes a website URL and extracts company context using Gemini 3 Pro Preview
  * Uses smart prompting to guide comprehensive analysis
  */
 
@@ -36,10 +36,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     const normalizedUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`
 
     try {
-      // Use Gemini Pro with structured JSON output
+      // Use Gemini 3 Pro Preview with structured JSON output
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-pro',
+        model: 'gemini-3-pro-preview',
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.3
