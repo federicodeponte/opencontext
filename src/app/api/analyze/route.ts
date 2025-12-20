@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { timingSafeEqual } from 'crypto'
 
 /**
  * POST /api/analyze
@@ -8,6 +9,38 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
  */
 
 export const maxDuration = 60
+
+// Simple in-memory rate limiting (for production, use Redis/Upstash KV)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+const RATE_LIMIT = 20 // requests per minute
+const RATE_WINDOW_MS = 60 * 1000 // 1 minute
+
+function checkRateLimit(identifier: string): { allowed: boolean; remaining: number; resetIn: number } {
+  const now = Date.now()
+  const record = rateLimitMap.get(identifier)
+
+  // Clean up expired entries periodically
+  if (rateLimitMap.size > 1000) {
+    for (const [key, value] of rateLimitMap.entries()) {
+      if (now > value.resetTime) {
+        rateLimitMap.delete(key)
+      }
+    }
+  }
+
+  if (!record || now > record.resetTime) {
+    // New window
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + RATE_WINDOW_MS })
+    return { allowed: true, remaining: RATE_LIMIT - 1, resetIn: RATE_WINDOW_MS }
+  }
+
+  if (record.count >= RATE_LIMIT) {
+    return { allowed: false, remaining: 0, resetIn: record.resetTime - now }
+  }
+
+  record.count++
+  return { allowed: true, remaining: RATE_LIMIT - record.count, resetIn: record.resetTime - now }
+}
 
 // SSRF Protection: Validate URL to prevent internal network access
 function validateUrl(input: string): { valid: boolean; url?: string; error?: string } {
@@ -29,10 +62,14 @@ function validateUrl(input: string): { valid: boolean; url?: string; error?: str
       return { valid: false, error: 'Localhost URLs not allowed' }
     }
 
-    // Block private IP ranges
+    // Block private IPv4 ranges
     const ipMatch = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
     if (ipMatch) {
       const [, a, b, c, d] = ipMatch.map(Number)
+      // Validate octets are in valid range
+      if (a > 255 || b > 255 || c > 255 || d > 255) {
+        return { valid: false, error: 'Invalid IP address' }
+      }
       // 10.0.0.0/8
       if (a === 10) return { valid: false, error: 'Private IP addresses not allowed' }
       // 172.16.0.0/12
@@ -43,6 +80,31 @@ function validateUrl(input: string): { valid: boolean; url?: string; error?: str
       if (a === 169 && b === 254) return { valid: false, error: 'Link-local addresses not allowed' }
       // 127.0.0.0/8 (loopback)
       if (a === 127) return { valid: false, error: 'Loopback addresses not allowed' }
+    }
+
+    // Block IPv6 addresses (including bracketed notation)
+    const ipv6Match = hostname.match(/^\[(.+)\]$/)
+    if (ipv6Match) {
+      const ipv6 = ipv6Match[1].toLowerCase()
+      // Block IPv6 loopback
+      if (ipv6 === '::1') return { valid: false, error: 'Loopback addresses not allowed' }
+      // Block IPv4-mapped IPv6 loopback (::ffff:127.x.x.x)
+      if (ipv6.startsWith('::ffff:127.')) return { valid: false, error: 'Loopback addresses not allowed' }
+      // Block IPv6 link-local (fe80::)
+      if (ipv6.startsWith('fe80:')) return { valid: false, error: 'Link-local addresses not allowed' }
+      // Block IPv6 unique local addresses (fc00::/7 = fc00:: and fd00::)
+      if (ipv6.startsWith('fc') || ipv6.startsWith('fd')) return { valid: false, error: 'Private IP addresses not allowed' }
+      // Block IPv4-mapped private addresses
+      if (ipv6.startsWith('::ffff:10.')) return { valid: false, error: 'Private IP addresses not allowed' }
+      if (ipv6.startsWith('::ffff:192.168.')) return { valid: false, error: 'Private IP addresses not allowed' }
+      // Block IPv4-mapped 172.16-31.x.x
+      const ipv4MappedMatch = ipv6.match(/^::ffff:(\d+)\.(\d+)\./)
+      if (ipv4MappedMatch) {
+        const [, first, second] = ipv4MappedMatch.map(Number)
+        if (first === 172 && second >= 16 && second <= 31) {
+          return { valid: false, error: 'Private IP addresses not allowed' }
+        }
+      }
     }
 
     // Block internal hostnames
@@ -92,8 +154,16 @@ function verifyApiKey(request: NextRequest): { isValid: boolean; environment?: s
     validKeys.push(...process.env.OPENCONTEXT_API_KEYS.split(',').map(k => k.trim()))
   }
 
-  // Check if token is valid
-  if (!validKeys.includes(token)) {
+  // Check if token is valid using constant-time comparison (prevents timing attacks)
+  const isValidKey = validKeys.some(key => {
+    if (key.length !== token.length) return false
+    try {
+      return timingSafeEqual(Buffer.from(key), Buffer.from(token))
+    } catch {
+      return false
+    }
+  })
+  if (!isValidKey) {
     return { isValid: false }
   }
 
@@ -108,6 +178,25 @@ function verifyApiKey(request: NextRequest): { isValid: boolean; environment?: s
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
+    // Rate limiting - use IP or forwarded header as identifier
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                     request.headers.get('x-real-ip') ||
+                     'unknown'
+    const rateLimit = checkRateLimit(clientIp)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Try again later.', resetIn: Math.ceil(rateLimit.resetIn / 1000) },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(RATE_LIMIT),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(Math.ceil(rateLimit.resetIn / 1000)),
+          }
+        }
+      )
+    }
+
     // Verify API key authentication
     const auth = verifyApiKey(request)
     if (!auth.isValid) {
@@ -115,11 +204,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         { error: 'API key required. Include "Authorization: Bearer YOUR_API_KEY" header.' },
         { status: 401 }
       )
-    }
-
-    // Log authentication info (for debugging)
-    if (auth.environment !== 'public') {
-      console.log(`[ANALYZE] Authenticated request - Environment: ${auth.environment}`)
     }
 
     const body = await request.json()
@@ -153,7 +237,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
     const normalizedUrl = urlValidation.url
 
-    console.log('[ANALYZE] Analyzing URL:', normalizedUrl)
+    // Log request (avoid exposing full URL in logs)
 
     try {
       // Use SDK with gemini-3-pro-preview + all features:
@@ -285,8 +369,7 @@ Analyze: ${normalizedUrl}`
       const result = await model.generateContent(prompt)
       const responseText = result.response.text()
 
-      console.log('[ANALYZE] Raw response length:', responseText.length)
-      console.log('[ANALYZE] Raw response preview:', responseText.substring(0, 500))
+      // Response received (avoid logging content in production)
 
       // Parse and validate JSON response
       let jsonText = responseText.trim()
@@ -311,7 +394,6 @@ Analyze: ${normalizedUrl}`
           jsonText = jsonMatch[0]
         } else {
           // Model returned non-JSON (probably an error message)
-          console.log('[ANALYZE] No JSON found in response, model returned:', jsonText.substring(0, 200))
           return NextResponse.json({
             error: 'Could not analyze website',
             message: jsonText.substring(0, 500)
@@ -323,17 +405,17 @@ Analyze: ${normalizedUrl}`
 
       // Check if response contains an error field (model couldn't find company)
       if (data.error && !data.company_name) {
-        console.log('[ANALYZE] Model returned error:', data.error)
         return NextResponse.json(data, { status: 422 })
       }
 
-      console.log('[ANALYZE] Successfully analyzed:', data.company_name || 'Unknown')
       return NextResponse.json(data)
     } catch (error) {
-      console.error('[ANALYZE] Full error:', error)
+      // Log error type only (avoid exposing sensitive details)
+      const errorType = error instanceof Error ? error.constructor.name : 'Unknown'
+      console.error(`[ANALYZE] Error type: ${errorType}`)
+
       if (error instanceof Error) {
         const errorMessage = error.message.toLowerCase()
-        console.error('[ANALYZE] Error message:', error.message)
 
         // API key errors
         if (errorMessage.includes('api key') ||
@@ -345,7 +427,6 @@ Analyze: ${normalizedUrl}`
           )
         }
 
-        console.error('Website analysis error:', error)
         return NextResponse.json(
           { error: 'Gemini API Error', details: error.message },
           { status: 500 }
