@@ -1,6 +1,9 @@
 [build]
 builder = "nixpacks"
 
+[variables]
+NODE_VERSION = "20.9.0"
+
 [deploy]
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
@@ -8,3 +11,4 @@ restartPolicyMaxRetries = 3
 
 [env]
 NODE_ENV = "production"
+FORCE_REBUILD = "2024-12-19-v2"
