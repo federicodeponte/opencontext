@@ -9,6 +9,53 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const maxDuration = 60
 
+// SSRF Protection: Validate URL to prevent internal network access
+function validateUrl(input: string): { valid: boolean; url?: string; error?: string } {
+  const normalized = input.trim().startsWith('http') ? input.trim() : `https://${input.trim()}`
+
+  try {
+    const url = new URL(normalized)
+
+    // Block non-HTTP protocols
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return { valid: false, error: 'Only HTTP/HTTPS URLs allowed' }
+    }
+
+    // Block private/local IPs and hostnames
+    const hostname = url.hostname.toLowerCase()
+
+    // Block localhost variations
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return { valid: false, error: 'Localhost URLs not allowed' }
+    }
+
+    // Block private IP ranges
+    const ipMatch = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+    if (ipMatch) {
+      const [, a, b, c, d] = ipMatch.map(Number)
+      // 10.0.0.0/8
+      if (a === 10) return { valid: false, error: 'Private IP addresses not allowed' }
+      // 172.16.0.0/12
+      if (a === 172 && b >= 16 && b <= 31) return { valid: false, error: 'Private IP addresses not allowed' }
+      // 192.168.0.0/16
+      if (a === 192 && b === 168) return { valid: false, error: 'Private IP addresses not allowed' }
+      // 169.254.0.0/16 (link-local)
+      if (a === 169 && b === 254) return { valid: false, error: 'Link-local addresses not allowed' }
+      // 127.0.0.0/8 (loopback)
+      if (a === 127) return { valid: false, error: 'Loopback addresses not allowed' }
+    }
+
+    // Block internal hostnames
+    if (hostname.endsWith('.local') || hostname.endsWith('.internal') || hostname.endsWith('.lan')) {
+      return { valid: false, error: 'Internal hostnames not allowed' }
+    }
+
+    return { valid: true, url: normalized }
+  } catch (err) {
+    return { valid: false, error: 'Invalid URL format' }
+  }
+}
+
 // Helper function to verify API key authentication
 function verifyApiKey(request: NextRequest): { isValid: boolean; environment?: string } {
   const authHeader = request.headers.get('authorization')
@@ -96,8 +143,15 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // Normalize URL
-    const normalizedUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`
+    // Validate and normalize URL (SSRF protection)
+    const urlValidation = validateUrl(url)
+    if (!urlValidation.valid || !urlValidation.url) {
+      return NextResponse.json(
+        { error: urlValidation.error || 'Invalid URL' },
+        { status: 400 }
+      )
+    }
+    const normalizedUrl = urlValidation.url
 
     console.log('[ANALYZE] Analyzing URL:', normalizedUrl)
 
