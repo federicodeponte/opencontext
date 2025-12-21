@@ -14,7 +14,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-const VERSION = '1.0.2'
+const VERSION = '1.0.3'
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 
@@ -273,11 +273,67 @@ function getDownloadsPath(): string {
 }
 
 // Generate filename from company name
-function generateFilename(companyName: string): string {
+function generateFilename(companyName: string, ext: string = 'json'): string {
   return companyName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') + '-context.json'
+    .replace(/^-|-$/g, '') + `-context.${ext}`
+}
+
+// Convert result to CSV format
+function resultToCSV(result: AnalysisResult): string {
+  const rows: string[] = []
+
+  // Header
+  rows.push('Field,Value')
+
+  // Helper to escape CSV values
+  const escape = (val: string) => `"${val.replace(/"/g, '""')}"`
+
+  // Basic fields
+  rows.push(`Company Name,${escape(result.company_name)}`)
+  rows.push(`Website,${escape(result.company_url)}`)
+  rows.push(`Industry,${escape(result.industry)}`)
+  rows.push(`Description,${escape(result.description)}`)
+  rows.push(`Target Audience,${escape(result.target_audience)}`)
+  rows.push(`Brand Tone,${escape(result.tone)}`)
+
+  // Arrays as semicolon-separated
+  if (result.products?.length) {
+    rows.push(`Products,${escape(result.products.join('; '))}`)
+  }
+  if (result.competitors?.length) {
+    rows.push(`Competitors,${escape(result.competitors.join('; '))}`)
+  }
+  if (result.pain_points?.length) {
+    rows.push(`Pain Points,${escape(result.pain_points.join('; '))}`)
+  }
+  if (result.value_propositions?.length) {
+    rows.push(`Value Propositions,${escape(result.value_propositions.join('; '))}`)
+  }
+  if (result.use_cases?.length) {
+    rows.push(`Use Cases,${escape(result.use_cases.join('; '))}`)
+  }
+  if (result.content_themes?.length) {
+    rows.push(`Content Themes,${escape(result.content_themes.join('; '))}`)
+  }
+
+  // Voice persona
+  if (result.voice_persona) {
+    rows.push(`ICP Profile,${escape(result.voice_persona.icp_profile)}`)
+    rows.push(`Voice Style,${escape(result.voice_persona.voice_style)}`)
+    if (result.voice_persona.do_list?.length) {
+      rows.push(`Do List,${escape(result.voice_persona.do_list.join('; '))}`)
+    }
+    if (result.voice_persona.dont_list?.length) {
+      rows.push(`Dont List,${escape(result.voice_persona.dont_list.join('; '))}`)
+    }
+    if (result.voice_persona.example_phrases?.length) {
+      rows.push(`Example Phrases,${escape(result.voice_persona.example_phrases.join('; '))}`)
+    }
+  }
+
+  return rows.join('\n')
 }
 
 // Commands
@@ -304,21 +360,27 @@ async function analyzeCommand(url: string, options: { output?: string; json?: bo
       console.log(formatAnalysisResult(result))
     }
 
-    // Always save to Downloads (or custom path if specified)
+    // Always save to Downloads (both JSON and CSV)
     const downloadsDir = getDownloadsPath()
-    const filename = generateFilename(result.company_name)
-    const outputPath = options.output || path.join(downloadsDir, filename)
+    const jsonPath = options.output || path.join(downloadsDir, generateFilename(result.company_name, 'json'))
+    const csvPath = jsonPath.replace(/\.json$/, '.csv')
 
-    const dir = path.dirname(outputPath)
+    const dir = path.dirname(jsonPath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
-    fs.writeFileSync(outputPath, JSON.stringify(result, null, 2))
+
+    // Save JSON
+    fs.writeFileSync(jsonPath, JSON.stringify(result, null, 2))
+
+    // Save CSV
+    fs.writeFileSync(csvPath, resultToCSV(result))
 
     console.log()
     console.log(boxen(
       chalk.green.bold('Saved!') + '\n\n' +
-      chalk.dim('File: ') + chalk.white(outputPath),
+      chalk.dim('JSON: ') + chalk.white(jsonPath) + '\n' +
+      chalk.dim('CSV:  ') + chalk.white(csvPath),
       { padding: 1, borderColor: 'green', borderStyle: 'round' }
     ))
 

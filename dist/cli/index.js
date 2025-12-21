@@ -49,7 +49,7 @@ const boxen_1 = __importDefault(require("boxen"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 // ASCII Logo
@@ -235,11 +235,60 @@ function getDownloadsPath() {
     return path.join(os.homedir(), 'Downloads');
 }
 // Generate filename from company name
-function generateFilename(companyName) {
+function generateFilename(companyName, ext = 'json') {
     return companyName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') + '-context.json';
+        .replace(/^-|-$/g, '') + `-context.${ext}`;
+}
+// Convert result to CSV format
+function resultToCSV(result) {
+    const rows = [];
+    // Header
+    rows.push('Field,Value');
+    // Helper to escape CSV values
+    const escape = (val) => `"${val.replace(/"/g, '""')}"`;
+    // Basic fields
+    rows.push(`Company Name,${escape(result.company_name)}`);
+    rows.push(`Website,${escape(result.company_url)}`);
+    rows.push(`Industry,${escape(result.industry)}`);
+    rows.push(`Description,${escape(result.description)}`);
+    rows.push(`Target Audience,${escape(result.target_audience)}`);
+    rows.push(`Brand Tone,${escape(result.tone)}`);
+    // Arrays as semicolon-separated
+    if (result.products?.length) {
+        rows.push(`Products,${escape(result.products.join('; '))}`);
+    }
+    if (result.competitors?.length) {
+        rows.push(`Competitors,${escape(result.competitors.join('; '))}`);
+    }
+    if (result.pain_points?.length) {
+        rows.push(`Pain Points,${escape(result.pain_points.join('; '))}`);
+    }
+    if (result.value_propositions?.length) {
+        rows.push(`Value Propositions,${escape(result.value_propositions.join('; '))}`);
+    }
+    if (result.use_cases?.length) {
+        rows.push(`Use Cases,${escape(result.use_cases.join('; '))}`);
+    }
+    if (result.content_themes?.length) {
+        rows.push(`Content Themes,${escape(result.content_themes.join('; '))}`);
+    }
+    // Voice persona
+    if (result.voice_persona) {
+        rows.push(`ICP Profile,${escape(result.voice_persona.icp_profile)}`);
+        rows.push(`Voice Style,${escape(result.voice_persona.voice_style)}`);
+        if (result.voice_persona.do_list?.length) {
+            rows.push(`Do List,${escape(result.voice_persona.do_list.join('; '))}`);
+        }
+        if (result.voice_persona.dont_list?.length) {
+            rows.push(`Dont List,${escape(result.voice_persona.dont_list.join('; '))}`);
+        }
+        if (result.voice_persona.example_phrases?.length) {
+            rows.push(`Example Phrases,${escape(result.voice_persona.example_phrases.join('; '))}`);
+        }
+    }
+    return rows.join('\n');
 }
 // Commands
 async function analyzeCommand(url, options) {
@@ -261,18 +310,22 @@ async function analyzeCommand(url, options) {
         else {
             console.log(formatAnalysisResult(result));
         }
-        // Always save to Downloads (or custom path if specified)
+        // Always save to Downloads (both JSON and CSV)
         const downloadsDir = getDownloadsPath();
-        const filename = generateFilename(result.company_name);
-        const outputPath = options.output || path.join(downloadsDir, filename);
-        const dir = path.dirname(outputPath);
+        const jsonPath = options.output || path.join(downloadsDir, generateFilename(result.company_name, 'json'));
+        const csvPath = jsonPath.replace(/\.json$/, '.csv');
+        const dir = path.dirname(jsonPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
-        fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+        // Save JSON
+        fs.writeFileSync(jsonPath, JSON.stringify(result, null, 2));
+        // Save CSV
+        fs.writeFileSync(csvPath, resultToCSV(result));
         console.log();
         console.log((0, boxen_1.default)(chalk_1.default.green.bold('Saved!') + '\n\n' +
-            chalk_1.default.dim('File: ') + chalk_1.default.white(outputPath), { padding: 1, borderColor: 'green', borderStyle: 'round' }));
+            chalk_1.default.dim('JSON: ') + chalk_1.default.white(jsonPath) + '\n' +
+            chalk_1.default.dim('CSV:  ') + chalk_1.default.white(csvPath), { padding: 1, borderColor: 'green', borderStyle: 'round' }));
     }
     catch (error) {
         spinner.fail('Analysis failed');
