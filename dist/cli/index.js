@@ -49,24 +49,24 @@ const boxen_1 = __importDefault(require("boxen"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 // ASCII Logo
 const LOGO = `
 ${chalk_1.default.cyan.bold(`
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║                                                                          ║
-    ║     ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███╗   ██╗████████╗║
-    ║    ██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝║
-    ║    ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██║     ██║   ██║██╔██╗ ██║   ██║   ║
-    ║    ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║     ██║   ██║██║╚██╗██║   ██║   ║
-    ║    ╚██████╔╝██║     ███████╗██║ ╚████║╚██████╗╚██████╔╝██║ ╚████║   ██║   ║
-    ║     ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ║
-    ║                                                                          ║
-    ║              ${chalk_1.default.white('✨ AI-Powered Company Analysis ✨')}                       ║
-    ║                                                                          ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
+  ╔═══════════════════════════════════════════════════════════════════════╗
+  ║                                                                       ║
+  ║   ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███╗   ██╗████████╗
+  ║  ██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝
+  ║  ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██║     ██║   ██║██╔██╗ ██║   ██║
+  ║  ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║     ██║   ██║██║╚██╗██║   ██║
+  ║  ╚██████╔╝██║     ███████╗██║ ╚████║╚██████╗╚██████╔╝██║ ╚████║   ██║
+  ║   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
+  ║                                                                       ║
+  ║`)}${chalk_1.default.white('               ✨ AI-Powered Company Analysis ✨')}${chalk_1.default.cyan.bold(`               ║
+  ║                                                                       ║
+  ╚═══════════════════════════════════════════════════════════════════════╝
 `)}
 `;
 // Config management
@@ -120,11 +120,27 @@ async function analyzeUrl(url, config) {
     if (config.geminiKey) {
         body.apiKey = config.geminiKey;
     }
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-    });
+    let response;
+    try {
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+        });
+    }
+    catch (err) {
+        // Network error - server not reachable
+        if (config.apiUrl.includes('localhost')) {
+            throw new Error(`Cannot connect to ${config.apiUrl}\n\n` +
+                `   The API server is not running. To fix:\n\n` +
+                `   Option 1: Start the server locally\n` +
+                `     cd opencontext && npm run dev\n\n` +
+                `   Option 2: Use a deployed API\n` +
+                `     opencontext config\n` +
+                `     (then set the API URL to your deployed instance)`);
+        }
+        throw new Error(`Cannot connect to ${config.apiUrl} - check your internet connection or API URL`);
+    }
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(error.error || error.message || `HTTP ${response.status}`);
