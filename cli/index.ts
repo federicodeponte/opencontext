@@ -14,7 +14,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-const VERSION = '1.0.3'
+const VERSION = '1.0.4'
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 
@@ -280,60 +280,50 @@ function generateFilename(companyName: string, ext: string = 'json'): string {
     .replace(/^-|-$/g, '') + `-context.${ext}`
 }
 
-// Convert result to CSV format
+// Convert result to CSV format (columns = fields, one row of data)
 function resultToCSV(result: AnalysisResult): string {
-  const rows: string[] = []
-
-  // Header
-  rows.push('Field,Value')
-
   // Helper to escape CSV values
   const escape = (val: string) => `"${val.replace(/"/g, '""')}"`
 
+  // Define headers and values
+  const headers: string[] = []
+  const values: string[] = []
+
   // Basic fields
-  rows.push(`Company Name,${escape(result.company_name)}`)
-  rows.push(`Website,${escape(result.company_url)}`)
-  rows.push(`Industry,${escape(result.industry)}`)
-  rows.push(`Description,${escape(result.description)}`)
-  rows.push(`Target Audience,${escape(result.target_audience)}`)
-  rows.push(`Brand Tone,${escape(result.tone)}`)
+  headers.push('Company Name', 'Website', 'Industry', 'Description', 'Target Audience', 'Brand Tone')
+  values.push(
+    escape(result.company_name),
+    escape(result.company_url),
+    escape(result.industry),
+    escape(result.description),
+    escape(result.target_audience),
+    escape(result.tone)
+  )
 
   // Arrays as semicolon-separated
-  if (result.products?.length) {
-    rows.push(`Products,${escape(result.products.join('; '))}`)
-  }
-  if (result.competitors?.length) {
-    rows.push(`Competitors,${escape(result.competitors.join('; '))}`)
-  }
-  if (result.pain_points?.length) {
-    rows.push(`Pain Points,${escape(result.pain_points.join('; '))}`)
-  }
-  if (result.value_propositions?.length) {
-    rows.push(`Value Propositions,${escape(result.value_propositions.join('; '))}`)
-  }
-  if (result.use_cases?.length) {
-    rows.push(`Use Cases,${escape(result.use_cases.join('; '))}`)
-  }
-  if (result.content_themes?.length) {
-    rows.push(`Content Themes,${escape(result.content_themes.join('; '))}`)
-  }
+  headers.push('Products', 'Competitors', 'Pain Points', 'Value Propositions', 'Use Cases', 'Content Themes')
+  values.push(
+    escape(result.products?.join('; ') || ''),
+    escape(result.competitors?.join('; ') || ''),
+    escape(result.pain_points?.join('; ') || ''),
+    escape(result.value_propositions?.join('; ') || ''),
+    escape(result.use_cases?.join('; ') || ''),
+    escape(result.content_themes?.join('; ') || '')
+  )
 
   // Voice persona
   if (result.voice_persona) {
-    rows.push(`ICP Profile,${escape(result.voice_persona.icp_profile)}`)
-    rows.push(`Voice Style,${escape(result.voice_persona.voice_style)}`)
-    if (result.voice_persona.do_list?.length) {
-      rows.push(`Do List,${escape(result.voice_persona.do_list.join('; '))}`)
-    }
-    if (result.voice_persona.dont_list?.length) {
-      rows.push(`Dont List,${escape(result.voice_persona.dont_list.join('; '))}`)
-    }
-    if (result.voice_persona.example_phrases?.length) {
-      rows.push(`Example Phrases,${escape(result.voice_persona.example_phrases.join('; '))}`)
-    }
+    headers.push('ICP Profile', 'Voice Style', 'Do List', 'Dont List', 'Example Phrases')
+    values.push(
+      escape(result.voice_persona.icp_profile || ''),
+      escape(result.voice_persona.voice_style || ''),
+      escape(result.voice_persona.do_list?.join('; ') || ''),
+      escape(result.voice_persona.dont_list?.join('; ') || ''),
+      escape(result.voice_persona.example_phrases?.join('; ') || '')
+    )
   }
 
-  return rows.join('\n')
+  return headers.join(',') + '\n' + values.join(',')
 }
 
 // Commands
