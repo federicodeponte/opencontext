@@ -3,6 +3,8 @@
 /**
  * OpenContext CLI - AI-Powered Company Analysis from your terminal
  * Analyze any company website and extract comprehensive context for content generation
+ *
+ * Calls Gemini API directly - no server needed!
  */
 
 import { Command } from 'commander'
@@ -13,8 +15,9 @@ import boxen from 'boxen'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const VERSION = '1.0.4'
+const VERSION = '2.0.0'
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 
@@ -38,10 +41,7 @@ ${chalk.cyan.bold(`
 
 // Interfaces
 interface Config {
-  apiUrl: string
-  apiKey: string
-  geminiKey?: string
-  outputDir: string
+  geminiKey: string
 }
 
 interface AnalysisResult {
@@ -75,9 +75,7 @@ interface AnalysisResult {
 // Config management
 function loadConfig(): Config {
   const defaults: Config = {
-    apiUrl: 'http://localhost:3000',
-    apiKey: '',
-    outputDir: './context-reports'
+    geminiKey: ''
   }
 
   try {
@@ -118,60 +116,94 @@ function printWarning(message: string): void {
   console.log(chalk.yellow('⚠'), message)
 }
 
-// API calls
+// Direct Gemini API call - no server needed!
 async function analyzeUrl(url: string, config: Config): Promise<AnalysisResult> {
-  const endpoint = `${config.apiUrl}/api/analyze`
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+  if (!config.geminiKey) {
+    throw new Error(
+      'Gemini API key not configured.\n\n' +
+      '   Run: opencontext config\n\n' +
+      '   Get your free API key at:\n' +
+      '   https://aistudio.google.com/apikey'
+    )
   }
 
-  if (config.apiKey) {
-    headers['Authorization'] = `Bearer ${config.apiKey}`
-  }
+  // Normalize URL
+  const normalizedUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`
 
-  const body: Record<string, string> = { url }
-  if (config.geminiKey) {
-    body.apiKey = config.geminiKey
-  }
-
-  let response: Response
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    })
-  } catch (err) {
-    // Network error - server not reachable
-    if (config.apiUrl.includes('localhost')) {
-      throw new Error(
-        `Cannot connect to ${config.apiUrl}\n\n` +
-        `   The API server is not running. To fix:\n\n` +
-        `   Option 1: Start the server locally\n` +
-        `     cd opencontext && npm run dev\n\n` +
-        `   Option 2: Use a deployed API\n` +
-        `     opencontext config\n` +
-        `     (then set the API URL to your deployed instance)`
-      )
+  // Initialize Gemini
+  const genAI = new GoogleGenerativeAI(config.geminiKey)
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    generationConfig: {
+      temperature: 0.3,
+      responseMimeType: 'application/json'
     }
-    throw new Error(`Cannot connect to ${config.apiUrl} - check your internet connection or API URL`)
-  }
+  })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string; message?: string }
-    throw new Error(error.error || error.message || `HTTP ${response.status}`)
-  }
+  const prompt = `You are an expert business analyst. Analyze the company website at ${normalizedUrl} and extract comprehensive company context.
 
-  return response.json() as Promise<AnalysisResult>
+IMPORTANT: Search the web for real information about this company. Do NOT hallucinate.
+
+Return ONLY valid JSON:
+{
+  "company_name": "Official company name",
+  "company_url": "${normalizedUrl}",
+  "industry": "Primary industry",
+  "description": "2-3 sentence description",
+  "products": ["Product 1", "Product 2"],
+  "target_audience": "Ideal customer profile",
+  "competitors": ["Competitor 1", "Competitor 2"],
+  "tone": "Brand voice description",
+  "pain_points": ["Pain point 1", "Pain point 2"],
+  "value_propositions": ["Value prop 1", "Value prop 2"],
+  "use_cases": ["Use case 1", "Use case 2"],
+  "content_themes": ["Theme 1", "Theme 2"],
+  "voice_persona": {
+    "icp_profile": "Who is the ideal reader (role, seniority, what they value)",
+    "voice_style": "How to write for this audience (tone, approach)",
+    "language_style": {
+      "formality": "casual/professional/formal",
+      "complexity": "simple/moderate/technical",
+      "sentence_length": "short/mixed/detailed",
+      "perspective": "peer-to-peer/expert-to-learner"
+    },
+    "do_list": ["Do this", "Do that"],
+    "dont_list": ["Don't do this", "Avoid that"],
+    "example_phrases": ["Example phrase 1", "Example phrase 2"]
+  }
 }
 
-async function checkHealth(config: Config): Promise<boolean> {
+Analyze: ${normalizedUrl}`
+
   try {
-    const response = await fetch(`${config.apiUrl}/api/health`)
-    return response.ok
-  } catch {
-    return false
+    const result = await model.generateContent(prompt)
+    const responseText = result.response.text()
+
+    // Parse JSON from response
+    let jsonText = responseText.trim()
+
+    // Extract from code blocks if present
+    if (jsonText.includes('```json')) {
+      jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+    } else if (jsonText.includes('```')) {
+      jsonText = jsonText.split('```')[1].split('```')[0].trim()
+    }
+
+    // Find JSON object
+    if (!jsonText.startsWith('{')) {
+      const match = jsonText.match(/\{[\s\S]*\}/)
+      if (match) jsonText = match[0]
+    }
+
+    return JSON.parse(jsonText) as AnalysisResult
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        throw new Error('Invalid Gemini API key. Get a new one at: https://aistudio.google.com/apikey')
+      }
+      throw error
+    }
+    throw new Error('Failed to analyze URL')
   }
 }
 
@@ -330,11 +362,6 @@ function resultToCSV(result: AnalysisResult): string {
 async function analyzeCommand(url: string, options: { output?: string; json?: boolean }): Promise<void> {
   const config = loadConfig()
 
-  if (!config.apiUrl) {
-    printError('API URL not configured. Run: opencontext config')
-    process.exit(1)
-  }
-
   const spinner = ora({
     text: `Analyzing ${chalk.cyan(url)}...`,
     color: 'cyan'
@@ -485,30 +512,16 @@ async function configCommand(): Promise<void> {
 
   const config = loadConfig()
 
+  console.log(chalk.dim('  Get your free Gemini API key at:'))
+  console.log(chalk.cyan('  https://aistudio.google.com/apikey\n'))
+
   const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'apiUrl',
-      message: 'API URL:',
-      default: config.apiUrl || 'http://localhost:3000'
-    },
-    {
-      type: 'password',
-      name: 'apiKey',
-      message: 'OpenContext API Key (optional):',
-      default: config.apiKey || ''
-    },
     {
       type: 'password',
       name: 'geminiKey',
-      message: 'Gemini API Key (if self-hosting):',
-      default: config.geminiKey || ''
-    },
-    {
-      type: 'input',
-      name: 'outputDir',
-      message: 'Default output directory:',
-      default: config.outputDir || './context-reports'
+      message: 'Gemini API Key:',
+      default: config.geminiKey || '',
+      validate: (input: string) => input.trim().length > 0 || 'API key is required'
     }
   ])
 
@@ -516,37 +529,29 @@ async function configCommand(): Promise<void> {
   console.log()
   printSuccess('Configuration saved!')
   console.log(chalk.dim(`  Config file: ${CONFIG_FILE}`))
-}
-
-async function healthCommand(): Promise<void> {
-  const config = loadConfig()
-
   console.log()
-  console.log(chalk.white.bold('  Checking API health...\n'))
-
-  const spinner = ora({
-    text: `Connecting to ${config.apiUrl}`,
-    color: 'cyan'
-  }).start()
-
-  const healthy = await checkHealth(config)
-
-  if (healthy) {
-    spinner.succeed(`API is ${chalk.green('healthy')}`)
-    console.log(chalk.dim(`  Endpoint: ${config.apiUrl}`))
-  } else {
-    spinner.fail(`API is ${chalk.red('unreachable')}`)
-    console.log()
-    printWarning('Make sure the API server is running')
-    console.log(chalk.dim('  Try: npm run dev (in the opencontext directory)'))
-    console.log(chalk.dim('  Or update the API URL: opencontext config'))
-  }
+  console.log(chalk.green('  Ready! Run: opencontext analyze <url>'))
 }
 
 async function interactiveMode(): Promise<void> {
   printLogo()
 
   const config = loadConfig()
+
+  // Check if API key is configured
+  if (!config.geminiKey) {
+    console.log(boxen(
+      chalk.yellow.bold('Setup Required\n\n') +
+      chalk.white('You need a Gemini API key to use OpenContext.\n\n') +
+      chalk.dim('Get your free key at:\n') +
+      chalk.cyan('https://aistudio.google.com/apikey'),
+      { padding: 1, borderColor: 'yellow', borderStyle: 'round' }
+    ))
+    console.log()
+
+    await configCommand()
+    return interactiveMode() // Restart after config
+  }
 
   while (true) {
     const { action } = await inquirer.prompt([
@@ -557,8 +562,7 @@ async function interactiveMode(): Promise<void> {
         choices: [
           { name: '🔍  Analyze a company website', value: 'analyze' },
           { name: '📦  Batch analyze multiple URLs', value: 'batch' },
-          { name: '⚙️   Configure settings', value: 'config' },
-          { name: '❤️   Check API health', value: 'health' },
+          { name: '⚙️   Configure API key', value: 'config' },
           new inquirer.Separator(),
           { name: '👋  Exit', value: 'exit' }
         ]
@@ -613,10 +617,6 @@ async function interactiveMode(): Promise<void> {
         await configCommand()
         break
 
-      case 'health':
-        await healthCommand()
-        break
-
       case 'exit':
         console.log(chalk.cyan('\n  Thanks for using OpenContext! 👋\n'))
         process.exit(0)
@@ -649,13 +649,8 @@ program
 
 program
   .command('config')
-  .description('Configure API settings')
+  .description('Configure your Gemini API key')
   .action(configCommand)
-
-program
-  .command('health')
-  .description('Check API connection')
-  .action(healthCommand)
 
 program
   .command('interactive')

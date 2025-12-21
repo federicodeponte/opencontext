@@ -3,6 +3,8 @@
 /**
  * OpenContext CLI - AI-Powered Company Analysis from your terminal
  * Analyze any company website and extract comprehensive context for content generation
+ *
+ * Calls Gemini API directly - no server needed!
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -49,7 +51,8 @@ const boxen_1 = __importDefault(require("boxen"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-const VERSION = '1.0.4';
+const generative_ai_1 = require("@google/generative-ai");
+const VERSION = '2.0.0';
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 // ASCII Logo
@@ -72,9 +75,7 @@ ${chalk_1.default.cyan.bold(`
 // Config management
 function loadConfig() {
     const defaults = {
-        apiUrl: 'http://localhost:3000',
-        apiKey: '',
-        outputDir: './context-reports'
+        geminiKey: ''
     };
     try {
         if (fs.existsSync(CONFIG_FILE)) {
@@ -107,53 +108,87 @@ function printInfo(message) {
 function printWarning(message) {
     console.log(chalk_1.default.yellow('⚠'), message);
 }
-// API calls
+// Direct Gemini API call - no server needed!
 async function analyzeUrl(url, config) {
-    const endpoint = `${config.apiUrl}/api/analyze`;
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-    if (config.apiKey) {
-        headers['Authorization'] = `Bearer ${config.apiKey}`;
+    if (!config.geminiKey) {
+        throw new Error('Gemini API key not configured.\n\n' +
+            '   Run: opencontext config\n\n' +
+            '   Get your free API key at:\n' +
+            '   https://aistudio.google.com/apikey');
     }
-    const body = { url };
-    if (config.geminiKey) {
-        body.apiKey = config.geminiKey;
-    }
-    let response;
-    try {
-        response = await fetch(endpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body)
-        });
-    }
-    catch (err) {
-        // Network error - server not reachable
-        if (config.apiUrl.includes('localhost')) {
-            throw new Error(`Cannot connect to ${config.apiUrl}\n\n` +
-                `   The API server is not running. To fix:\n\n` +
-                `   Option 1: Start the server locally\n` +
-                `     cd opencontext && npm run dev\n\n` +
-                `   Option 2: Use a deployed API\n` +
-                `     opencontext config\n` +
-                `     (then set the API URL to your deployed instance)`);
+    // Normalize URL
+    const normalizedUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
+    // Initialize Gemini
+    const genAI = new generative_ai_1.GoogleGenerativeAI(config.geminiKey);
+    const model = genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash',
+        generationConfig: {
+            temperature: 0.3,
+            responseMimeType: 'application/json'
         }
-        throw new Error(`Cannot connect to ${config.apiUrl} - check your internet connection or API URL`);
-    }
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(error.error || error.message || `HTTP ${response.status}`);
-    }
-    return response.json();
+    });
+    const prompt = `You are an expert business analyst. Analyze the company website at ${normalizedUrl} and extract comprehensive company context.
+
+IMPORTANT: Search the web for real information about this company. Do NOT hallucinate.
+
+Return ONLY valid JSON:
+{
+  "company_name": "Official company name",
+  "company_url": "${normalizedUrl}",
+  "industry": "Primary industry",
+  "description": "2-3 sentence description",
+  "products": ["Product 1", "Product 2"],
+  "target_audience": "Ideal customer profile",
+  "competitors": ["Competitor 1", "Competitor 2"],
+  "tone": "Brand voice description",
+  "pain_points": ["Pain point 1", "Pain point 2"],
+  "value_propositions": ["Value prop 1", "Value prop 2"],
+  "use_cases": ["Use case 1", "Use case 2"],
+  "content_themes": ["Theme 1", "Theme 2"],
+  "voice_persona": {
+    "icp_profile": "Who is the ideal reader (role, seniority, what they value)",
+    "voice_style": "How to write for this audience (tone, approach)",
+    "language_style": {
+      "formality": "casual/professional/formal",
+      "complexity": "simple/moderate/technical",
+      "sentence_length": "short/mixed/detailed",
+      "perspective": "peer-to-peer/expert-to-learner"
+    },
+    "do_list": ["Do this", "Do that"],
+    "dont_list": ["Don't do this", "Avoid that"],
+    "example_phrases": ["Example phrase 1", "Example phrase 2"]
+  }
 }
-async function checkHealth(config) {
+
+Analyze: ${normalizedUrl}`;
     try {
-        const response = await fetch(`${config.apiUrl}/api/health`);
-        return response.ok;
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        // Parse JSON from response
+        let jsonText = responseText.trim();
+        // Extract from code blocks if present
+        if (jsonText.includes('```json')) {
+            jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+        }
+        else if (jsonText.includes('```')) {
+            jsonText = jsonText.split('```')[1].split('```')[0].trim();
+        }
+        // Find JSON object
+        if (!jsonText.startsWith('{')) {
+            const match = jsonText.match(/\{[\s\S]*\}/);
+            if (match)
+                jsonText = match[0];
+        }
+        return JSON.parse(jsonText);
     }
-    catch {
-        return false;
+    catch (error) {
+        if (error instanceof Error) {
+            if (error.message.includes('API key')) {
+                throw new Error('Invalid Gemini API key. Get a new one at: https://aistudio.google.com/apikey');
+            }
+            throw error;
+        }
+        throw new Error('Failed to analyze URL');
     }
 }
 // Format output
@@ -264,10 +299,6 @@ function resultToCSV(result) {
 // Commands
 async function analyzeCommand(url, options) {
     const config = loadConfig();
-    if (!config.apiUrl) {
-        printError('API URL not configured. Run: opencontext config');
-        process.exit(1);
-    }
     const spinner = (0, ora_1.default)({
         text: `Analyzing ${chalk_1.default.cyan(url)}...`,
         color: 'cyan'
@@ -385,61 +416,37 @@ async function configCommand() {
     printLogo();
     console.log(chalk_1.default.white.bold('  Configuration\n'));
     const config = loadConfig();
+    console.log(chalk_1.default.dim('  Get your free Gemini API key at:'));
+    console.log(chalk_1.default.cyan('  https://aistudio.google.com/apikey\n'));
     const answers = await inquirer_1.default.prompt([
-        {
-            type: 'input',
-            name: 'apiUrl',
-            message: 'API URL:',
-            default: config.apiUrl || 'http://localhost:3000'
-        },
-        {
-            type: 'password',
-            name: 'apiKey',
-            message: 'OpenContext API Key (optional):',
-            default: config.apiKey || ''
-        },
         {
             type: 'password',
             name: 'geminiKey',
-            message: 'Gemini API Key (if self-hosting):',
-            default: config.geminiKey || ''
-        },
-        {
-            type: 'input',
-            name: 'outputDir',
-            message: 'Default output directory:',
-            default: config.outputDir || './context-reports'
+            message: 'Gemini API Key:',
+            default: config.geminiKey || '',
+            validate: (input) => input.trim().length > 0 || 'API key is required'
         }
     ]);
     saveConfig(answers);
     console.log();
     printSuccess('Configuration saved!');
     console.log(chalk_1.default.dim(`  Config file: ${CONFIG_FILE}`));
-}
-async function healthCommand() {
-    const config = loadConfig();
     console.log();
-    console.log(chalk_1.default.white.bold('  Checking API health...\n'));
-    const spinner = (0, ora_1.default)({
-        text: `Connecting to ${config.apiUrl}`,
-        color: 'cyan'
-    }).start();
-    const healthy = await checkHealth(config);
-    if (healthy) {
-        spinner.succeed(`API is ${chalk_1.default.green('healthy')}`);
-        console.log(chalk_1.default.dim(`  Endpoint: ${config.apiUrl}`));
-    }
-    else {
-        spinner.fail(`API is ${chalk_1.default.red('unreachable')}`);
-        console.log();
-        printWarning('Make sure the API server is running');
-        console.log(chalk_1.default.dim('  Try: npm run dev (in the opencontext directory)'));
-        console.log(chalk_1.default.dim('  Or update the API URL: opencontext config'));
-    }
+    console.log(chalk_1.default.green('  Ready! Run: opencontext analyze <url>'));
 }
 async function interactiveMode() {
     printLogo();
     const config = loadConfig();
+    // Check if API key is configured
+    if (!config.geminiKey) {
+        console.log((0, boxen_1.default)(chalk_1.default.yellow.bold('Setup Required\n\n') +
+            chalk_1.default.white('You need a Gemini API key to use OpenContext.\n\n') +
+            chalk_1.default.dim('Get your free key at:\n') +
+            chalk_1.default.cyan('https://aistudio.google.com/apikey'), { padding: 1, borderColor: 'yellow', borderStyle: 'round' }));
+        console.log();
+        await configCommand();
+        return interactiveMode(); // Restart after config
+    }
     while (true) {
         const { action } = await inquirer_1.default.prompt([
             {
@@ -449,8 +456,7 @@ async function interactiveMode() {
                 choices: [
                     { name: '🔍  Analyze a company website', value: 'analyze' },
                     { name: '📦  Batch analyze multiple URLs', value: 'batch' },
-                    { name: '⚙️   Configure settings', value: 'config' },
-                    { name: '❤️   Check API health', value: 'health' },
+                    { name: '⚙️   Configure API key', value: 'config' },
                     new inquirer_1.default.Separator(),
                     { name: '👋  Exit', value: 'exit' }
                 ]
@@ -494,9 +500,6 @@ async function interactiveMode() {
             case 'config':
                 await configCommand();
                 break;
-            case 'health':
-                await healthCommand();
-                break;
             case 'exit':
                 console.log(chalk_1.default.cyan('\n  Thanks for using OpenContext! 👋\n'));
                 process.exit(0);
@@ -523,12 +526,8 @@ program
     .action(batchCommand);
 program
     .command('config')
-    .description('Configure API settings')
+    .description('Configure your Gemini API key')
     .action(configCommand);
-program
-    .command('health')
-    .description('Check API connection')
-    .action(healthCommand);
 program
     .command('interactive')
     .description('Start interactive mode')

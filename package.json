@@ -1,6 +1,6 @@
 {
   "name": "opencontext",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "description": "AI-powered company context analysis from your terminal. Extract comprehensive company profiles with a single command.",
   "main": "dist/cli/index.js",
   "bin": {
