@@ -49,7 +49,7 @@ const boxen_1 = __importDefault(require("boxen"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 // ASCII Logo
@@ -230,6 +230,17 @@ function formatAnalysisResult(result) {
     sections.push(chalk_1.default.cyan('═══════════════════════════════════════════════════════════════\n'));
     return sections.join('\n');
 }
+// Get Downloads folder path
+function getDownloadsPath() {
+    return path.join(os.homedir(), 'Downloads');
+}
+// Generate filename from company name
+function generateFilename(companyName) {
+    return companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') + '-context.json';
+}
 // Commands
 async function analyzeCommand(url, options) {
     const config = loadConfig();
@@ -250,16 +261,18 @@ async function analyzeCommand(url, options) {
         else {
             console.log(formatAnalysisResult(result));
         }
-        // Save to file if requested
-        if (options.output) {
-            const outputPath = options.output;
-            const dir = path.dirname(outputPath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
-            printSuccess(`Saved to ${outputPath}`);
+        // Always save to Downloads (or custom path if specified)
+        const downloadsDir = getDownloadsPath();
+        const filename = generateFilename(result.company_name);
+        const outputPath = options.output || path.join(downloadsDir, filename);
+        const dir = path.dirname(outputPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
         }
+        fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+        console.log();
+        console.log((0, boxen_1.default)(chalk_1.default.green.bold('Saved!') + '\n\n' +
+            chalk_1.default.dim('File: ') + chalk_1.default.white(outputPath), { padding: 1, borderColor: 'green', borderStyle: 'round' }));
     }
     catch (error) {
         spinner.fail('Analysis failed');
@@ -304,7 +317,7 @@ async function batchCommand(inputFile, options) {
     console.log((0, boxen_1.default)(chalk_1.default.white.bold(`Batch Analysis\n\n`) +
         chalk_1.default.dim(`Found ${chalk_1.default.cyan(urls.length.toString())} URLs to analyze`), { padding: 1, borderColor: 'cyan', borderStyle: 'round' }));
     console.log();
-    const outputDir = options.outputDir || config.outputDir || './context-reports';
+    const outputDir = options.outputDir || path.join(getDownloadsPath(), 'opencontext-reports');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
@@ -430,28 +443,8 @@ async function interactiveMode() {
                         validate: (input) => input.trim().length > 0 || 'URL is required'
                     }
                 ]);
-                const { saveToFile } = await inquirer_1.default.prompt([
-                    {
-                        type: 'confirm',
-                        name: 'saveToFile',
-                        message: 'Save result to file?',
-                        default: true
-                    }
-                ]);
-                let outputPath;
-                if (saveToFile) {
-                    const { path: outPath } = await inquirer_1.default.prompt([
-                        {
-                            type: 'input',
-                            name: 'path',
-                            message: 'Output file path:',
-                            default: './context-report.json'
-                        }
-                    ]);
-                    outputPath = outPath;
-                }
                 console.log();
-                await analyzeCommand(url.trim(), { output: outputPath });
+                await analyzeCommand(url.trim(), {});
                 break;
             }
             case 'batch': {
@@ -462,22 +455,16 @@ async function interactiveMode() {
                     console.log(chalk_1.default.dim('  Supported formats: .json, .csv, .txt (one URL per line)'));
                     break;
                 }
-                const { inputFile, outputDir } = await inquirer_1.default.prompt([
+                const { inputFile } = await inquirer_1.default.prompt([
                     {
                         type: 'list',
                         name: 'inputFile',
                         message: 'Select input file:',
                         choices: files
-                    },
-                    {
-                        type: 'input',
-                        name: 'outputDir',
-                        message: 'Output directory:',
-                        default: config.outputDir || './context-reports'
                     }
                 ]);
                 console.log();
-                await batchCommand(inputFile, { outputDir });
+                await batchCommand(inputFile, {});
                 break;
             }
             case 'config':

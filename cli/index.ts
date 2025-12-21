@@ -14,7 +14,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-const VERSION = '1.0.1'
+const VERSION = '1.0.2'
 const CONFIG_DIR = path.join(os.homedir(), '.opencontext')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 
@@ -267,6 +267,19 @@ function formatAnalysisResult(result: AnalysisResult): string {
   return sections.join('\n')
 }
 
+// Get Downloads folder path
+function getDownloadsPath(): string {
+  return path.join(os.homedir(), 'Downloads')
+}
+
+// Generate filename from company name
+function generateFilename(companyName: string): string {
+  return companyName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') + '-context.json'
+}
+
 // Commands
 async function analyzeCommand(url: string, options: { output?: string; json?: boolean }): Promise<void> {
   const config = loadConfig()
@@ -291,16 +304,23 @@ async function analyzeCommand(url: string, options: { output?: string; json?: bo
       console.log(formatAnalysisResult(result))
     }
 
-    // Save to file if requested
-    if (options.output) {
-      const outputPath = options.output
-      const dir = path.dirname(outputPath)
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
-      }
-      fs.writeFileSync(outputPath, JSON.stringify(result, null, 2))
-      printSuccess(`Saved to ${outputPath}`)
+    // Always save to Downloads (or custom path if specified)
+    const downloadsDir = getDownloadsPath()
+    const filename = generateFilename(result.company_name)
+    const outputPath = options.output || path.join(downloadsDir, filename)
+
+    const dir = path.dirname(outputPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
     }
+    fs.writeFileSync(outputPath, JSON.stringify(result, null, 2))
+
+    console.log()
+    console.log(boxen(
+      chalk.green.bold('Saved!') + '\n\n' +
+      chalk.dim('File: ') + chalk.white(outputPath),
+      { padding: 1, borderColor: 'green', borderStyle: 'round' }
+    ))
 
   } catch (error) {
     spinner.fail('Analysis failed')
@@ -354,7 +374,7 @@ async function batchCommand(inputFile: string, options: { outputDir?: string }):
   ))
   console.log()
 
-  const outputDir = options.outputDir || config.outputDir || './context-reports'
+  const outputDir = options.outputDir || path.join(getDownloadsPath(), 'opencontext-reports')
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true })
   }
@@ -506,30 +526,8 @@ async function interactiveMode(): Promise<void> {
           }
         ])
 
-        const { saveToFile } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'saveToFile',
-            message: 'Save result to file?',
-            default: true
-          }
-        ])
-
-        let outputPath: string | undefined
-        if (saveToFile) {
-          const { path: outPath } = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'path',
-              message: 'Output file path:',
-              default: './context-report.json'
-            }
-          ])
-          outputPath = outPath
-        }
-
         console.log()
-        await analyzeCommand(url.trim(), { output: outputPath })
+        await analyzeCommand(url.trim(), {})
         break
       }
 
@@ -545,23 +543,17 @@ async function interactiveMode(): Promise<void> {
           break
         }
 
-        const { inputFile, outputDir } = await inquirer.prompt([
+        const { inputFile } = await inquirer.prompt([
           {
             type: 'list',
             name: 'inputFile',
             message: 'Select input file:',
             choices: files
-          },
-          {
-            type: 'input',
-            name: 'outputDir',
-            message: 'Output directory:',
-            default: config.outputDir || './context-reports'
           }
         ])
 
         console.log()
-        await batchCommand(inputFile, { outputDir })
+        await batchCommand(inputFile, {})
         break
       }
 
