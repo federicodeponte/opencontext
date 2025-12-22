@@ -161,22 +161,42 @@ opencontext/
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GEMINI_API_KEY` | Google Gemini API key | Yes |
+| `GEMINI_API_KEY` | Google Gemini API key | Yes* |
+
+\* Required if not providing `apiKey` in request body
+
+### 🔐 API Key Options
+
+You can provide your Gemini API key in two ways:
+
+1. **Environment Variable (Recommended for deployment)**
+   ```bash
+   GEMINI_API_KEY=your_key_here
+   ```
+
+2. **Request Body (Recommended for client-side usage)**
+   ```json
+   {
+     "url": "https://example.com",
+     "apiKey": "your_key_here"
+   }
+   ```
+
+**Security Note:** Never hardcode API keys in client-side code. For production deployments, always use environment variables and keep your API routes server-side only.
 
 ## 🔧 Error Handling
 
 The API returns appropriate HTTP status codes:
 
 - `200` - Success
-- `400` - Invalid request (missing URL)
-- `401` - Invalid API key
-- `503` - Service unavailable (missing API key configuration)
+- `400` - Invalid request (missing URL or API key)
+- `429` - Rate limit exceeded
 - `500` - Internal server error
 
 Example error response:
 ```json
 {
-  "error": "Website analysis is temporarily unavailable. Please configure your Gemini API key."
+  "error": "Gemini API key required. Provide \"apiKey\" in request body or set GEMINI_API_KEY environment variable."
 }
 ```
 

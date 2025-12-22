@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { timingSafeEqual } from 'crypto'
 
 /**
  * POST /api/analyze
@@ -118,63 +117,8 @@ function validateUrl(input: string): { valid: boolean; url?: string; error?: str
   }
 }
 
-// Helper function to verify API key authentication
-function verifyApiKey(request: NextRequest): { isValid: boolean; environment?: string } {
-  const authHeader = request.headers.get('authorization')
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // No authentication provided - check if it's required
-    const hasApiKeys = process.env.OPENCONTEXT_API_KEY ||
-                       process.env.OPENCONTEXT_API_KEY_DEV ||
-                       process.env.OPENCONTEXT_API_KEY_STAGING ||
-                       process.env.OPENCONTEXT_API_KEY_PROD ||
-                       process.env.OPENCONTEXT_API_KEYS
-
-    // If no API keys configured, allow public access (development mode)
-    if (!hasApiKeys) {
-      return { isValid: true, environment: 'public' }
-    }
-
-    return { isValid: false }
-  }
-
-  const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-
-  // Get valid API keys
-  const validKeys: string[] = []
-
-  // Add individual environment keys
-  if (process.env.OPENCONTEXT_API_KEY_DEV) validKeys.push(process.env.OPENCONTEXT_API_KEY_DEV)
-  if (process.env.OPENCONTEXT_API_KEY_STAGING) validKeys.push(process.env.OPENCONTEXT_API_KEY_STAGING)
-  if (process.env.OPENCONTEXT_API_KEY_PROD) validKeys.push(process.env.OPENCONTEXT_API_KEY_PROD)
-  if (process.env.OPENCONTEXT_API_KEY) validKeys.push(process.env.OPENCONTEXT_API_KEY)
-
-  // Add comma-separated keys
-  if (process.env.OPENCONTEXT_API_KEYS) {
-    validKeys.push(...process.env.OPENCONTEXT_API_KEYS.split(',').map(k => k.trim()))
-  }
-
-  // Check if token is valid using constant-time comparison (prevents timing attacks)
-  const isValidKey = validKeys.some(key => {
-    if (key.length !== token.length) return false
-    try {
-      return timingSafeEqual(Buffer.from(key), Buffer.from(token))
-    } catch {
-      return false
-    }
-  })
-  if (!isValidKey) {
-    return { isValid: false }
-  }
-
-  // Determine environment from key prefix
-  let environment = 'custom'
-  if (token.startsWith('oc_dev_')) environment = 'development'
-  else if (token.startsWith('oc_staging_')) environment = 'staging'
-  else if (token.startsWith('oc_prod_')) environment = 'production'
-
-  return { isValid: true, environment }
-}
+// Removed OPENCONTEXT_API_KEY auth system - stateless API for open source
+// Users provide their own Gemini API key (in body or environment)
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
@@ -197,15 +141,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // Verify API key authentication
-    const auth = verifyApiKey(request)
-    if (!auth.isValid) {
-      return NextResponse.json(
-        { error: 'API key required. Include "Authorization: Bearer YOUR_API_KEY" header.' },
-        { status: 401 }
-      )
-    }
-
     const body = await request.json()
     const { url, apiKey: clientApiKey } = body
 
@@ -216,13 +151,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       )
     }
 
-    // Use OPENCONTEXT_GEMINI_KEY to avoid conflicts with shell env
-    const apiKey = process.env.OPENCONTEXT_GEMINI_KEY || process.env.GEMINI_API_KEY || clientApiKey
+    // Use Gemini API key from environment OR request body (user's choice)
+    const apiKey = process.env.GEMINI_API_KEY || clientApiKey
 
     if (!apiKey || typeof apiKey !== 'string') {
-      console.error('[ANALYZE] No OPENCONTEXT_GEMINI_KEY or GEMINI_API_KEY environment variable set')
+      console.error('[ANALYZE] No GEMINI_API_KEY environment variable set and no apiKey in request body')
       return NextResponse.json(
-        { error: 'API key required. Send "apiKey" in request body or configure GEMINI_API_KEY environment variable.' },
+        { error: 'Gemini API key required. Provide "apiKey" in request body or set GEMINI_API_KEY environment variable.' },
         { status: 400 }
       )
     }
