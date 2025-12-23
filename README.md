@@ -1,121 +1,56 @@
 # OpenContext
 
-**Simple API for AI-powered company context analysis using Google Gemini**
+**AI-powered company context analysis CLI using Google Gemini**
 
-OpenContext is a lightweight Next.js API that extracts comprehensive company information from any website URL using Google's Gemini AI. Perfect for lead research, competitive analysis, and business intelligence.
+OpenContext extracts comprehensive company information from any website URL using Google's Gemini AI. Perfect for lead research, competitive analysis, and business intelligence.
 
-## ✨ Features
+## Features
 
-- **🤖 AI-Powered Analysis** - Uses Google Gemini 3 Pro Preview to extract comprehensive company context
-- **⚡ Simple API** - Single endpoint: URL input → structured JSON output
-- **🔒 Secure** - Server-side API key configuration
-- **📊 Structured Output** - Consistent JSON schema for easy integration
+- AI-Powered Analysis using Google Gemini 2.0 Flash
+- Simple CLI interface
+- Structured JSON output
+- Standalone - just needs your Gemini API key
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Google Gemini API key ([Get one here](https://aistudio.google.com/app/apikey))
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/federicodeponte/opencontext.git
-   cd opencontext
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-   
-   Add your Gemini API key to `.env.local`:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-
-4. **Start the API server**
-   ```bash
-   npm run dev
-   ```
-
-   The API will be available at [http://localhost:3000](http://localhost:3000)
-
-## 📖 API Usage
-
-### Endpoint
-
-**POST** `/api/analyze`
-
-### Request
-
-```json
-{
-  "url": "https://example.com",
-  "apiKey": "your-gemini-api-key"  // Optional if GEMINI_API_KEY env var is set
-}
-```
-
-### Response
-
-```json
-{
-  "company_name": "Example Company",
-  "company_url": "https://example.com",
-  "industry": "Technology",
-  "description": "A comprehensive description of the company...",
-  "products": ["Product 1", "Product 2"],
-  "target_audience": "Tech startups and enterprises",
-  "competitors": ["Competitor A", "Competitor B"],
-  "tone": "Professional and technical",
-  "pain_points": ["Problem 1", "Problem 2"],
-  "value_propositions": ["Value 1", "Value 2"],
-  "use_cases": ["Use case 1", "Use case 2"],
-  "content_themes": ["Theme 1", "Theme 2"]
-}
-```
-
-### cURL Example
+## Installation
 
 ```bash
-curl -X POST http://localhost:3000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://anthropic.com"
-  }'
+git clone https://github.com/federicodeponte/opencontext.git
+cd opencontext
+pip install -e .
 ```
 
-### JavaScript Example
+## Configuration
 
-```javascript
-const response = await fetch('/api/analyze', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    url: 'https://example.com'
-  }),
-});
+Set your Gemini API key:
 
-const analysis = await response.json();
-console.log(analysis);
+```bash
+# Option 1: Environment variable
+export GEMINI_API_KEY=your_key_here
+
+# Option 2: Use configure command
+opencontext configure
 ```
 
-## 🛠️ Technical Details
+Get a Gemini API key at [aistudio.google.com](https://aistudio.google.com/app/apikey)
 
-### What Gets Extracted
+## Usage
+
+```bash
+# Analyze a company website
+opencontext analyze https://example.com
+
+# Save output to file
+opencontext analyze https://example.com -o company.json
+
+# Show help
+opencontext --help
+```
+
+## What Gets Extracted
 
 The AI analyzes the website and extracts:
 - Company name and website
-- Industry and description  
+- Industry and description
 - Products/services offered
 - Target audience
 - Main competitors
@@ -125,89 +60,23 @@ The AI analyzes the website and extracts:
 - Use cases and applications
 - Content themes and topics
 
-### Project Structure
+## Example Output
 
-```
-opencontext/
-├── src/
-│   ├── app/
-│   │   ├── api/analyze/route.ts    # Main analysis API
-│   │   ├── layout.tsx              # Minimal layout
-│   │   └── page.tsx                # API documentation page
-│   └── lib/
-│       └── types.ts                # TypeScript definitions
-├── .env.example                    # Environment template
-└── README.md
-```
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-
-1. **Push to GitHub**
-   ```bash
-   git add .
-   git commit -m "Initial commit"
-   git push origin main
-   ```
-
-2. **Deploy to Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Import your GitHub repository
-   - Add `GEMINI_API_KEY` environment variable
-   - Deploy
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GEMINI_API_KEY` | Google Gemini API key | Yes* |
-
-\* Required if not providing `apiKey` in request body
-
-### 🔐 API Key Options
-
-You can provide your Gemini API key in two ways:
-
-1. **Environment Variable (Recommended for deployment)**
-   ```bash
-   GEMINI_API_KEY=your_key_here
-   ```
-
-2. **Request Body (Recommended for client-side usage)**
-   ```json
-   {
-     "url": "https://example.com",
-     "apiKey": "your_key_here"
-   }
-   ```
-
-**Security Note:** Never hardcode API keys in client-side code. For production deployments, always use environment variables and keep your API routes server-side only.
-
-## 🔧 Error Handling
-
-The API returns appropriate HTTP status codes:
-
-- `200` - Success
-- `400` - Invalid request (missing URL or API key)
-- `429` - Rate limit exceeded
-- `500` - Internal server error
-
-Example error response:
 ```json
 {
-  "error": "Gemini API key required. Provide \"apiKey\" in request body or set GEMINI_API_KEY environment variable."
+  "company_name": "Example Company",
+  "company_url": "https://example.com",
+  "industry": "Technology",
+  "description": "A comprehensive description...",
+  "products": ["Product 1", "Product 2"],
+  "target_audience": "Tech startups and enterprises",
+  "competitors": ["Competitor A", "Competitor B"],
+  "tone": "Professional and technical",
+  "pain_points": ["Problem 1", "Problem 2"],
+  "value_propositions": ["Value 1", "Value 2"]
 }
 ```
 
-## 📝 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📧 Support
-
-- **Issues:** [GitHub Issues](https://github.com/federicodeponte/opencontext/issues)
-
----
-
-**Made with ❤️ by [Federico de Ponte](https://github.com/federicodeponte)**
+MIT License - see [LICENSE](LICENSE) for details.
