@@ -107,7 +107,7 @@ class GeminiClient:
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        use_url_context: bool = True,
+        use_url_context: bool = False,  # Disabled - not supported by gemini-2.0-flash
         use_google_search: bool = True,
         json_output: bool = True,
         temperature: float = 0.3,

@@ -63,7 +63,7 @@ async def run_opencontext(url: str, api_key: Optional[str] = None) -> CompanyCon
     """
     Run OpenContext analysis on a company URL.
 
-    Uses shared GeminiClient with URL Context + Google Search grounding.
+    Uses shared GeminiClient with Google Search grounding.
 
     Args:
         url: Company website URL
@@ -92,10 +92,10 @@ async def run_opencontext(url: str, api_key: Optional[str] = None) -> CompanyCon
         # Build prompt (loaded from prompts/opencontext.txt)
         prompt = _get_opencontext_prompt(url)
 
-        # Call with URL Context + Google Search grounding
+        # Call with Google Search grounding (URL Context not supported by gemini-2.0-flash)
         result = await client.generate(
             prompt=prompt,
-            use_url_context=True,
+            use_url_context=False,
             use_google_search=True,
             json_output=True,
             temperature=0.3,
