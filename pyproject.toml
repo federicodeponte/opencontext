@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opencontext"
-version = "2.0.0"
+version = "3.0.0"
 description = "AI-Powered Company Context Analysis - Extract comprehensive company context from any website using Gemini AI"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "OpenContext", email = "hello@opencontext.dev" }
 ]
-keywords = ["company", "context", "ai", "gemini", "analysis", "brand", "persona", "content", "cli"]
+keywords = ["company", "context", "ai", "gemini", "analysis", "brand", "persona", "content", "cli", "visual-identity", "authors"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -29,11 +29,14 @@ dependencies = [
     "click>=8.0.0",
     "rich>=13.0.0",
     "google-genai>=1.0.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
@@ -46,7 +49,16 @@ Homepage = "https://github.com/federicodeponte/opencontext"
 Repository = "https://github.com/federicodeponte/opencontext"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["opencontext", "shared", "cli.py"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "opencontext/**",
+    "shared/**",
+    "cli.py",
+    "README.md",
+    "LICENSE",
+]
 
 [tool.black]
 line-length = 100
@@ -54,3 +66,6 @@ line-length = 100
 [tool.ruff]
 line-length = 100
 select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
