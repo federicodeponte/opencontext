@@ -1,6 +1,6 @@
 # OpenContext
 
-**AI-powered company context analysis CLI using Google Gemini**
+**AI-powered company context analysis using Google Gemini**
 
 OpenContext extracts comprehensive company information from any website URL using Google's Gemini AI. Perfect for lead research, competitive analysis, content creation, and business intelligence.
 
@@ -10,12 +10,13 @@ OpenContext extracts comprehensive company information from any website URL usin
 - **Visual Identity Extraction** for consistent image generation (brand colors, style, mood)
 - **Blog Authors** extraction from existing articles
 - **Writing Persona (voice_persona)** tailored to ICP for content creation
-- **Simple CLI** interface with beautiful output
+- **CLI & REST API** - Use from terminal or integrate via HTTP
 - **Structured JSON** output matching openblog schema
 - **Modular Architecture** with shared GeminiClient
 
 ## What's New in v3.0
 
+- **REST API**: FastAPI server with async job support
 - **Visual Identity**: Brand colors, design elements, typography, image style prompts
 - **Blog Image Examples**: Analyzes existing blog images for style reference
 - **Authors Extraction**: Finds real blog authors with profiles
@@ -64,11 +65,54 @@ opencontext check
 opencontext --help
 ```
 
+## REST API
+
+Start the API server:
+
+```bash
+# Install API dependencies
+pip install -e ".[api]"
+
+# Start server
+uvicorn api:app --reload --port 8000
+
+# API docs at http://localhost:8000/docs
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Health check |
+| POST | `/api/v1/analyze` | Analyze company (sync, blocking) |
+| POST | `/api/v1/jobs` | Start analysis job (async) |
+| GET | `/api/v1/jobs` | List all jobs |
+| GET | `/api/v1/jobs/{id}` | Get job status/result |
+| DELETE | `/api/v1/jobs/{id}` | Delete job |
+
+### Example API Usage
+
+```bash
+# Synchronous analysis (blocking)
+curl -X POST http://localhost:8000/api/v1/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+
+# Async job (non-blocking)
+curl -X POST http://localhost:8000/api/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+
+# Check job status
+curl http://localhost:8000/api/v1/jobs/{job_id}
+```
+
 ## Project Structure
 
 ```
 opencontext/
 ├── cli.py                      # CLI entry point
+├── api.py                      # FastAPI REST API
 ├── opencontext/                # Main package
 │   ├── __init__.py
 │   ├── models.py               # Pydantic models (CompanyContext, VoicePersona, etc.)
@@ -81,6 +125,8 @@ opencontext/
 │   ├── gemini_client.py        # Unified Gemini client
 │   └── prompt_loader.py        # Load prompts from files
 ├── pyproject.toml
+├── requirements.txt
+├── CLAUDE.md
 └── README.md
 ```
 

@@ -1,0 +1,19 @@
+# OpenContext - Dependencies
+
+# Core
+pydantic>=2.0
+python-dotenv>=1.0
+
+# HTTP
+httpx>=0.25
+
+# AI
+google-genai>=1.0
+
+# CLI
+click>=8.0
+rich>=13.0
+
+# API Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0

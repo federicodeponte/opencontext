@@ -31,14 +31,22 @@ dependencies = [
     "google-genai>=1.0.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",
 ]
 
 [project.optional-dependencies]
+api = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+]
+all = [
+    "opencontext[api,dev]",
 ]
 
 [project.scripts]
@@ -49,15 +57,18 @@ Homepage = "https://github.com/federicodeponte/opencontext"
 Repository = "https://github.com/federicodeponte/opencontext"
 
 [tool.hatch.build.targets.wheel]
-packages = ["opencontext", "shared", "cli.py"]
+packages = ["opencontext", "shared", "cli.py", "api.py"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "opencontext/**",
     "shared/**",
     "cli.py",
+    "api.py",
     "README.md",
     "LICENSE",
+    "CLAUDE.md",
+    "requirements.txt",
 ]
 
 [tool.black]
