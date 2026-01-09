@@ -8,7 +8,7 @@ Full parity with openblog/stage 1 schema.
 import logging
 import re
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,8 @@ class EEATElements(BaseModel):
     These elements help demonstrate Experience, Expertise, Authoritativeness,
     and Trustworthiness - critical for AI search visibility and SEO.
     """
+    model_config = {"coerce_numbers_to_str": True}
+
     # Experience - demonstrable first-hand experience
     customer_count: str = Field(default="", description="Number of customers served (e.g., '10,000+', '500 enterprises')")
     reviews_rating: str = Field(default="", description="Review score if visible (e.g., '4.9/5 stars', '4.8 on G2')")
@@ -84,6 +86,19 @@ class EEATElements(BaseModel):
     pricing_transparency: str = Field(default="", description="Pricing visibility (e.g., 'public pricing', 'contact sales', 'freemium')")
     guarantees: List[str] = Field(default_factory=list, description="Guarantees offered (e.g., 'money-back guarantee', 'free trial')")
     security_compliance: List[str] = Field(default_factory=list, description="Security/compliance mentions (e.g., 'GDPR compliant', 'HIPAA')")
+
+    @field_validator('customer_count', 'reviews_rating', 'years_in_business', 'pricing_transparency', mode='before')
+    @classmethod
+    def convert_none_to_empty(cls, v):
+        """Convert None to empty string."""
+        return "" if v is None else str(v)
+
+    @field_validator('case_study_topics', 'founder_credentials', 'certifications', 'awards',
+                     'media_mentions', 'partnerships', 'investors', 'guarantees', 'security_compliance', mode='before')
+    @classmethod
+    def convert_none_to_list(cls, v):
+        """Convert None to empty list."""
+        return [] if v is None else v
 
 
 # =============================================================================
