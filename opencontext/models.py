@@ -54,6 +54,39 @@ class AuthorInfo(BaseModel):
 
 
 # =============================================================================
+# EEAT Elements (Experience, Expertise, Authority, Trust)
+# =============================================================================
+
+class EEATElements(BaseModel):
+    """
+    EEAT Elements for Google's content quality signals.
+
+    These elements help demonstrate Experience, Expertise, Authoritativeness,
+    and Trustworthiness - critical for AI search visibility and SEO.
+    """
+    # Experience - demonstrable first-hand experience
+    customer_count: str = Field(default="", description="Number of customers served (e.g., '10,000+', '500 enterprises')")
+    reviews_rating: str = Field(default="", description="Review score if visible (e.g., '4.9/5 stars', '4.8 on G2')")
+    years_in_business: str = Field(default="", description="Years company has been operating")
+    case_study_topics: List[str] = Field(default_factory=list, description="Topics/industries of case studies mentioned")
+
+    # Expertise - credentials and knowledge signals
+    founder_credentials: List[str] = Field(default_factory=list, description="Founder/team credentials (e.g., 'Ex-Google', 'Stanford PhD')")
+    certifications: List[str] = Field(default_factory=list, description="Company certifications (e.g., 'SOC 2 Type II', 'ISO 27001')")
+    awards: List[str] = Field(default_factory=list, description="Awards and recognition")
+
+    # Authoritativeness - external validation
+    media_mentions: List[str] = Field(default_factory=list, description="Publications that have featured the company")
+    partnerships: List[str] = Field(default_factory=list, description="Notable partnerships or integrations")
+    investors: List[str] = Field(default_factory=list, description="Notable investors if disclosed")
+
+    # Trustworthiness - trust signals
+    pricing_transparency: str = Field(default="", description="Pricing visibility (e.g., 'public pricing', 'contact sales', 'freemium')")
+    guarantees: List[str] = Field(default_factory=list, description="Guarantees offered (e.g., 'money-back guarantee', 'free trial')")
+    security_compliance: List[str] = Field(default_factory=list, description="Security/compliance mentions (e.g., 'GDPR compliant', 'HIPAA')")
+
+
+# =============================================================================
 # Visual Identity (for Image Generation)
 # =============================================================================
 
@@ -106,6 +139,7 @@ class CompanyContext(BaseModel):
     voice_persona: VoicePersona = Field(default_factory=VoicePersona, description="Writing persona for ICP")
     visual_identity: VisualIdentity = Field(default_factory=VisualIdentity, description="Visual identity for image generation")
     authors: List[AuthorInfo] = Field(default_factory=list, description="Blog authors extracted from articles")
+    eeat: EEATElements = Field(default_factory=EEATElements, description="EEAT elements for content quality signals")
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CompanyContext":
@@ -154,6 +188,11 @@ class CompanyContext(BaseModel):
                     }
                     parsed_authors.append(AuthorInfo(**cleaned))
             data["authors"] = parsed_authors
+
+        # Handle eeat separately
+        eeat_data = data.get("eeat", {})
+        if eeat_data and isinstance(eeat_data, dict):
+            data["eeat"] = EEATElements(**eeat_data)
 
         return cls(**{k: v for k, v in data.items() if k in cls.model_fields})
 
