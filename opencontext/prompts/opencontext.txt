@@ -17,12 +17,16 @@ Analyze all retrieved information to provide:
 6. Customer pain points they address
 7. Common use cases
 8. Content themes they focus on
-9. Main competitors:
+9. **Primary market location**:
+   - **primary_region**: Geographic region name (e.g., "North America", "DACH", "Europe")
+   - **primary_country**: ISO country code (e.g., "US", "DE", "GB", "FR") - detect from website language, pricing currency, or headquarters
+   - **primary_language**: ISO language code (e.g., "en", "de", "fr") - detect from website content language
+10. Main competitors:
    - **competitors**: Specific company names (e.g., "Salesforce", "HubSpot", "Notion")
    - **competitor_categories**: Types of competing solutions (e.g., "Traditional SEO Agencies", "In-house Marketing Teams", "Manual Spreadsheet Processes")
-10. **CRITICAL: A detailed voice_persona for content writing**
-11. **CRITICAL: Visual identity for image generation**
-12. **Blog authors (extract from existing blog articles)**
+11. **CRITICAL: A detailed voice_persona for content writing**
+12. **CRITICAL: Visual identity for image generation**
+13. **Blog authors (extract from existing blog articles)**
 
 ## VOICE PERSONA
 
@@ -105,6 +109,9 @@ Return ONLY valid JSON in exactly this format:
   "value_propositions": ["Value prop 1", "Value prop 2"],
   "use_cases": ["Use case 1", "Use case 2"],
   "content_themes": ["Theme 1", "Theme 2"],
+  "primary_region": "Geographic region name (e.g., North America, DACH, Europe)",
+  "primary_country": "ISO country code (e.g., US, DE, GB, FR)",
+  "primary_language": "ISO language code (e.g., en, de, fr)",
   "voice_persona": {{
     "icp_profile": "Brief description of the ICP this voice is tailored for.",
     "voice_style": "2-3 sentence description of the writing voice that resonates with this ICP.",
