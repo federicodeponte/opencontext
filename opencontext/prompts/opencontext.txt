@@ -17,7 +17,9 @@ Analyze all retrieved information to provide:
 6. Customer pain points they address
 7. Common use cases
 8. Content themes they focus on
-9. Main competitors (based on industry and offerings)
+9. Main competitors:
+   - **competitors**: Specific company names (e.g., "Salesforce", "HubSpot", "Notion")
+   - **competitor_categories**: Types of competing solutions (e.g., "Traditional SEO Agencies", "In-house Marketing Teams", "Manual Spreadsheet Processes")
 10. **CRITICAL: A detailed voice_persona for content writing**
 11. **CRITICAL: Visual identity for image generation**
 12. **Blog authors (extract from existing blog articles)**
@@ -96,7 +98,8 @@ Return ONLY valid JSON in exactly this format:
   "description": "Clear 2-3 sentence company description",
   "products": ["Product 1", "Product 2"],
   "target_audience": "Ideal customer profile description",
-  "competitors": ["Competitor 1", "Competitor 2"],
+  "competitors": ["Specific Company Name 1", "Specific Company Name 2"],
+  "competitor_categories": ["Type of competitor 1 (e.g., Traditional SEO Agencies)", "Type of competitor 2 (e.g., In-house Content Teams)"],
   "tone": "Brand voice description (e.g., professional, friendly, authoritative)",
   "pain_points": ["Pain point 1", "Pain point 2"],
   "value_propositions": ["Value prop 1", "Value prop 2"],
