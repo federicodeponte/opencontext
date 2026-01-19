@@ -27,7 +27,8 @@ DEFAULT_BASE_DELAY = 1.0  # seconds
 DEFAULT_MAX_DELAY = 30.0  # seconds
 
 # Load .env from project root
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_path, override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class GeminiClient:
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        use_url_context: bool = False,  # Disabled - not supported by gemini-2.0-flash
+        use_url_context: bool = False,
         use_google_search: bool = True,
         json_output: bool = True,
         temperature: float = 0.3,
@@ -237,7 +238,12 @@ class GeminiClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            pass
+            # Try repair before balanced extraction
+            try:
+                repaired = self._repair_json(text)
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
 
         # Fallback: Extract balanced JSON object
         brace_count = 0
@@ -269,7 +275,156 @@ class GeminiClient:
         if end_idx > 0:
             text = text[:end_idx]
 
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            # Try to repair common JSON issues from Gemini
+            logger.warning(f"JSON parse failed, attempting repair: {e}")
+            repaired = self._repair_json(text)
+            return json.loads(repaired)
+    
+    def _repair_json(self, text: str) -> str:
+        """
+        Attempt to repair common JSON issues from Gemini responses.
+        """
+        # Fix unquoted property names (JavaScript-style): { foo: "bar" } -> { "foo": "bar" }
+        # Match: start of object or comma, optional whitespace, unquoted word, colon
+        text = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', text)
+        
+        # Remove trailing commas before ] or }
+        text = re.sub(r',\s*([}\]])', r'\1', text)
+        
+        # Add missing commas between array elements or object properties
+        # Pattern: }" -> },"  or ]" -> ],"  (but not at end)
+        text = re.sub(r'([}\]"])\s*\n\s*"', r'\1,\n"', text)
+        text = re.sub(r'([}\]])\s*\n\s*\{', r'\1,\n{', text)
+        text = re.sub(r'([}\]])\s*\n\s*\[', r'\1,\n[', text)
+        
+        # Fix missing commas between string values
+        text = re.sub(r'"\s*\n\s*"', '",\n"', text)
+        
+        return text
+
+    async def generate_with_schema(
+        self,
+        prompt: str,
+        response_schema: Any,
+        system_instruction: Optional[str] = None,
+        use_url_context: bool = False,
+        use_google_search: bool = True,
+        temperature: float = 0.3,
+        max_tokens: int = 8192,
+        timeout: int = 180,
+        extract_sources: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Generate content with structured output using response_schema.
+
+        This method uses Gemini's native structured output feature with a JSON schema,
+        which guarantees the response matches the expected structure.
+
+        Args:
+            prompt: The prompt to send to Gemini
+            response_schema: JSON schema or Pydantic model for response structure
+            system_instruction: Optional system instruction
+            use_url_context: Enable URL Context tool for fetching web pages
+            use_google_search: Enable Google Search tool for grounding
+            temperature: Generation temperature (0-1)
+            max_tokens: Maximum output tokens
+            timeout: Request timeout in seconds
+            extract_sources: Extract URLs from grounding metadata
+
+        Returns:
+            Dict matching the provided schema
+        """
+        self._ensure_initialized()
+
+        # Build tools list
+        tools = []
+        if use_url_context:
+            tools.append(self._types.Tool(url_context=self._types.UrlContext()))
+        if use_google_search:
+            tools.append(self._types.Tool(google_search=self._types.GoogleSearch()))
+
+        # Build config with response_schema for structured output
+        config = self._types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            tools=tools if tools else None,
+            response_mime_type="application/json",
+            response_schema=response_schema,
+        )
+
+        logger.debug(f"Generating with schema: model={GEMINI_MODEL}, tools={len(tools)}")
+
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._client.models.generate_content,
+                        model=GEMINI_MODEL,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=timeout,
+                )
+
+                text = response.text.strip()
+                result = self._parse_json(text)
+
+                # Extract grounding sources if requested
+                if extract_sources and use_google_search:
+                    grounding_sources = self._extract_grounding_sources(response)
+                    if grounding_sources:
+                        result["_grounding_sources"] = grounding_sources
+
+                return result
+
+            except asyncio.TimeoutError:
+                last_error = asyncio.TimeoutError(f"Request timed out after {timeout}s")
+                logger.warning(f"Gemini request timed out (attempt {attempt + 1}/{self.max_retries + 1})")
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                is_retryable = any(x in error_str for x in [
+                    'rate limit', '429', '500', '502', '503', '504',
+                    'overloaded', 'quota', 'temporarily unavailable',
+                    'connection', 'timeout', 'resource exhausted'
+                ])
+
+                if not is_retryable or attempt >= self.max_retries:
+                    logger.error(f"Gemini generation with schema failed: {e}")
+                    raise
+
+                logger.warning(f"Gemini request failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}")
+
+            if attempt < self.max_retries:
+                delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+                jitter = random.uniform(0, delay * 0.1)
+                await asyncio.sleep(delay + jitter)
+
+        raise last_error
+
+    def _extract_grounding_sources(self, response: Any) -> List[Dict[str, str]]:
+        """Extract grounding sources from Gemini response metadata."""
+        sources = []
+        try:
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                    metadata = candidate.grounding_metadata
+                    if hasattr(metadata, 'grounding_chunks') and metadata.grounding_chunks:
+                        for chunk in metadata.grounding_chunks:
+                            if hasattr(chunk, 'web') and chunk.web:
+                                sources.append({
+                                    'uri': getattr(chunk.web, 'uri', ''),
+                                    'title': getattr(chunk.web, 'title', '')
+                                })
+        except Exception as e:
+            logger.warning(f"Failed to extract grounding sources: {e}")
+        return sources
 
     def __repr__(self) -> str:
         return f"GeminiClient(model={GEMINI_MODEL}, initialized={self._initialized})"

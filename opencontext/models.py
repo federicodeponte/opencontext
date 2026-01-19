@@ -140,9 +140,11 @@ class CompanyContext(BaseModel):
     industry: str = Field(default="", description="Primary industry category")
     description: str = Field(default="", description="2-3 sentence company description")
     products: List[str] = Field(default_factory=list, description="Products/services offered")
+    services: List[str] = Field(default_factory=list, description="Services offered")
     target_audience: str = Field(default="", description="Ideal customer profile description")
-    competitors: List[str] = Field(default_factory=list, description="Specific competitor company names (e.g., 'Salesforce', 'HubSpot')")
-    competitor_categories: List[str] = Field(default_factory=list, description="Types of competing solutions (e.g., 'Traditional SEO Agencies', 'In-house Marketing Teams')")
+    target_audiences: List[str] = Field(default_factory=list, description="Target audience segments")
+    competitors: List[str] = Field(default_factory=list, description="Main competitors (specific company names)")
+    competitor_categories: List[str] = Field(default_factory=list, description="Categories of competing solutions")
     primary_region: str = Field(default="", description="Primary geographic market (e.g., 'North America', 'DACH', 'Europe')")
     primary_country: str = Field(default="US", description="Primary country ISO code (e.g., 'US', 'DE', 'GB')")
     primary_language: str = Field(default="en", description="Primary language ISO code (e.g., 'en', 'de', 'fr')")
@@ -155,15 +157,26 @@ class CompanyContext(BaseModel):
     visual_identity: VisualIdentity = Field(default_factory=VisualIdentity, description="Visual identity for image generation")
     authors: List[AuthorInfo] = Field(default_factory=list, description="Blog authors extracted from articles")
     eeat: EEATElements = Field(default_factory=EEATElements, description="EEAT elements for content quality signals")
+    gtm_playbook: str = Field(default="", description="Go-to-market strategy/playbook classification")
+    product_type: str = Field(default="", description="Product type classification (SaaS, API, Platform, etc.)")
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CompanyContext":
-        """Create from dictionary, handling nested voice_persona and visual_identity."""
+        """Create from dictionary, normalizing camelCase keys and handling nested structures."""
         if not data:
             return cls()
 
+        # Normalize camelCase to snake_case for top-level keys
+        normalized: Dict[str, Any] = {}
+        for key, value in data.items():
+            # Convert camelCase/PascalCase to snake_case
+            snake = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+            normalized[snake] = value
+
+        data = normalized
+
         # Handle voice_persona separately
-        voice_data = data.get("voice_persona", {})
+        voice_data = data.get("voice_persona", {}) or data.get("voicePersona", {})
         if voice_data and isinstance(voice_data, dict):
             # Handle nested language_style
             lang_style_data = voice_data.get("language_style", {})
@@ -172,7 +185,7 @@ class CompanyContext(BaseModel):
             data["voice_persona"] = VoicePersona(**voice_data)
 
         # Handle visual_identity separately
-        visual_data = data.get("visual_identity", {})
+        visual_data = data.get("visual_identity", {}) or data.get("visualidentity", {})
         if visual_data and isinstance(visual_data, dict):
             # Handle nested blog_image_examples with proper error handling
             examples = visual_data.get("blog_image_examples", [])
