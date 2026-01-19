@@ -26,8 +26,8 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_BASE_DELAY = 1.0  # seconds
 DEFAULT_MAX_DELAY = 30.0  # seconds
 
-# Load .env from project root
-_env_path = Path(__file__).parent.parent / ".env"
+# Load .env from python-backend root (go up 4 levels: shared -> context -> services -> python-backend)
+_env_path = Path(__file__).parent.parent.parent.parent / ".env"
 load_dotenv(_env_path, override=True)
 
 logger = logging.getLogger(__name__)
