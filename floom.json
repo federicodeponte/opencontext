@@ -1,0 +1,27 @@
+{
+  "name": "OpenContext",
+  "description": "AI-powered company context analysis. Extracts comprehensive company information (industry, products, competitors, target audience, voice persona, visual identity) from any website using Google Gemini with Search grounding.",
+  "runtime": "python",
+  "actions": {
+    "analyze": {
+      "label": "Analyze Company",
+      "inputs": [
+        {"name": "url", "type": "url", "label": "Company Website URL", "required": true, "placeholder": "https://example.com"},
+        {"name": "additional_context", "type": "textarea", "label": "Additional Context", "required": false, "placeholder": "Any extra info about the company (optional)"}
+      ],
+      "outputs": [
+        {"name": "company_name", "type": "text", "label": "Company Name"},
+        {"name": "summary", "type": "markdown", "label": "Company Summary"},
+        {"name": "context_json", "type": "json", "label": "Full Context Data"}
+      ]
+    }
+  },
+  "python_dependencies": [
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "httpx>=0.25",
+    "google-genai>=1.0"
+  ],
+  "secrets_needed": ["GEMINI_API_KEY"],
+  "manifest_version": "2.0"
+}
