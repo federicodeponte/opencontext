@@ -18,9 +18,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def analyze(url: str, additional_context: str = "") -> dict:
+def analyze(url: str, additional_context: str = "", _knowledge: dict = None) -> dict:
     """Analyze a company website and extract comprehensive context."""
     print(f"Analyzing company: {url}")
+
+    # Merge knowledge docs into additional_context if provided
+    if _knowledge:
+        knowledge_text = "\n".join(
+            f"[{name}]: {text[:500]}" for name, text in _knowledge.items()
+        )
+        additional_context = (additional_context + "\n\n" + knowledge_text).strip() if additional_context else knowledge_text
+        logger.info("analyze() merged %d knowledge docs into context", len(_knowledge))
 
     # Build user_context from additional_context if provided
     user_context = None
